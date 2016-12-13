@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   
   s.requires_arc  = true
   s.platform = :ios
-  s.ios.deployment_target = '8.4'
+  s.ios.deployment_target = '7.1'
 
   s.dependency 'CocoaSecurity', '~> 1.2.1'
 
