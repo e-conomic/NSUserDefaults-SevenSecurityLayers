@@ -12,14 +12,12 @@
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 1) Encrypt data (available)
 2) stricted key rule
-3) Obfuscate secret key, hide secret key in binary code (available)
-3) Hash key, protect secret key in runtime (available)
+3) Obfuscate secret key (available)
 4) Mutli encryption (On-going)
-5) Detect data hijack (done)
-6) Bind UserDefault to device hardware (done))
+5) Detect data hijack
+6) Bind UserDefault to device hardware
 7) Frozen data preference file
-
-* support multi notification handling model (done)
+ 
 * Support non-secured storage (done)
 * Support iCloud backup (on-going)
 * Support migrate (done)
@@ -33,36 +31,22 @@
 EX_NSSTRING * NOTIFICATION_SECRET_KEY_NOT_SET __attribute__((deprecated("not support this anymore!")));
 EX_NSSTRING * NOTIFICATION_CANNOT_RETRIEVE_ENCRYPTED_DATA;
 EX_NSSTRING * NOTIFICATION_CANNOT_STORE_ENCRYPTED_DATA;
-EX_NSSTRING * NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED;
-
-typedef NS_ENUM(NSInteger, NotificationSecurity)
-{
-    NotificationSecretKeyNotSet    = 1,
-    NotificationCannotRetrieveData = 2,
-    NotificationCannotStoreData    = 3,
-    NotificationDataIsViolated     = 4
-};
-
+EX_NSSTRING * NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED __attribute__((deprecated("not support yet!")));
 //################################################################################################################
-typedef NS_OPTIONS(NSInteger, CombineEncryption)
+typedef NS_ENUM(NSInteger, EncryptionAlgorithm)
 {
-    CombineDefault = 1 << 0,
-    CombineSHA     = 1 << 1,
-    CombineMD5     = 1 << 2,
-    CombineAES     = 1 << 3
+    EncryptionDefault = 1 << 0,
+    EncryptionSHA     = 1 << 1,
+    EncryptionMD5     = 1 << 2,
+    EncryptionAES     = 1 << 3
 };
 
-typedef NS_OPTIONS(NSInteger, iCloudMode)
+typedef NS_ENUM(NSInteger, iCloudMode)
 {
     iCloudDefault = 1 <<0,
     iCloudAll     = 1 <<1
 };
-@class CocoaSecurityResult;
-typedef id (^ EncryptionAlgorimth)(NSString *key, NSObject *value, CocoaSecurityResult *secretKey, CocoaSecurityResult * UUID);
-typedef id (^ DecryptionAlgorimth)(NSString *key, NSData *data, CocoaSecurityResult * secretKey, CocoaSecurityResult * UUID);
 //################################################################################################################
-NSString* UUID();
-
 @interface NSUserDefaults (SevenSecurityLayers)
 
 +(void) migrate:(NSUserDefaults*) source to:(NSUserDefaults*) destination clearSource:(BOOL)clear;
@@ -70,16 +54,13 @@ NSString* UUID();
 +(instancetype) securedUserDefaults;
 +(void) resetSecuredUserDefaults;
 -(instancetype) setSecretKey:(NSString*) secretKey;
--(instancetype) setUUID:(NSString *)UUID;
--(instancetype) setCombination:(CombineEncryption) combination;
+-(instancetype) setEncryption:(EncryptionAlgorithm) encryptionAlgorithm;
 -(instancetype) setiCloud:(iCloudMode) iCloudMode;
--(instancetype) setEncryption:(EncryptionAlgorimth)encryptBlock decryption:(DecryptionAlgorimth) decryptBlock;
 
 @end
 //################################################################################################################
 @interface NSDictionary (SevenSecurityLayers)
 
--(NotificationSecurity) notificationFromUserInfo;
 -(NSString*) messageFromUserInfo;
 -(NSString*) keyFromUserInfo;
 -(id) valueFromUserInfo;
@@ -125,70 +106,70 @@ NSString* UUID();
 
 @interface NSString (UAObfuscatedString)
 
-- (NSString *) a;
-- (NSString *) b;
-- (NSString *) c;
-- (NSString *) d;
-- (NSString *) e;
-- (NSString *) f;
-- (NSString *) g;
-- (NSString *) h;
-- (NSString *) i;
-- (NSString *) j;
-- (NSString *) k;
-- (NSString *) l;
-- (NSString *) m;
-- (NSString *) n;
-- (NSString *) o;
-- (NSString *) p;
-- (NSString *) q;
-- (NSString *) r;
-- (NSString *) s;
-- (NSString *) t;
-- (NSString *) u;
-- (NSString *) v;
-- (NSString *) w;
-- (NSString *) x;
-- (NSString *) y;
-- (NSString *) z;
+- (NSString *)a;
+- (NSString *)b;
+- (NSString *)c;
+- (NSString *)d;
+- (NSString *)e;
+- (NSString *)f;
+- (NSString *)g;
+- (NSString *)h;
+- (NSString *)i;
+- (NSString *)j;
+- (NSString *)k;
+- (NSString *)l;
+- (NSString *)m;
+- (NSString *)n;
+- (NSString *)o;
+- (NSString *)p;
+- (NSString *)q;
+- (NSString *)r;
+- (NSString *)s;
+- (NSString *)t;
+- (NSString *)u;
+- (NSString *)v;
+- (NSString *)w;
+- (NSString *)x;
+- (NSString *)y;
+- (NSString *)z;
 
-- (NSString *) _A;
-- (NSString *) _B;
-- (NSString *) _C;
-- (NSString *) _D;
-- (NSString *) _E;
-- (NSString *) _F;
-- (NSString *) _G;
-- (NSString *) _H;
-- (NSString *) _I;
-- (NSString *) _J;
-- (NSString *) _K;
-- (NSString *) _L;
-- (NSString *) _M;
-- (NSString *) _N;
-- (NSString *) _O;
-- (NSString *) _P;
-- (NSString *) _Q;
-- (NSString *) _R;
-- (NSString *) _S;
-- (NSString *) _T;
-- (NSString *) _U;
-- (NSString *) _V;
-- (NSString *) _W;
-- (NSString *) _X;
-- (NSString *) _Y;
-- (NSString *) _Z;
+- (NSString *)A;
+- (NSString *)B;
+- (NSString *)C;
+- (NSString *)D;
+- (NSString *)E;
+- (NSString *)F;
+- (NSString *)G;
+- (NSString *)H;
+- (NSString *)I;
+- (NSString *)J;
+- (NSString *)K;
+- (NSString *)L;
+- (NSString *)M;
+- (NSString *)N;
+- (NSString *)O;
+- (NSString *)P;
+- (NSString *)Q;
+- (NSString *)R;
+- (NSString *)S;
+- (NSString *)T;
+- (NSString *)U;
+- (NSString *)V;
+- (NSString *)W;
+- (NSString *)X;
+- (NSString *)Y;
+- (NSString *)Z;
 
-- (NSString *) _1;
-- (NSString *) _2;
-- (NSString *) _3;
-- (NSString *) _4;
-- (NSString *) _5;
-- (NSString *) _6;
-- (NSString *) _7;
-- (NSString *) _8;
-- (NSString *) _9;
-- (NSString *) _0;
+- (NSString *)_1;
+- (NSString *)_2;
+- (NSString *)_3;
+- (NSString *)_4;
+- (NSString *)_5;
+- (NSString *)_6;
+- (NSString *)_7;
+- (NSString *)_8;
+- (NSString *)_9;
+- (NSString *)_0;
 
 - (NSString *)_;
 - (NSString *)space;

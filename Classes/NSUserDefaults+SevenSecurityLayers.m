@@ -8,7 +8,9 @@
 
 #import "NSUserDefaults+SevenSecurityLayers.h"
 #import "CocoaSecurity.h"
-#import "DKPassword.h"
+
+#define kStoredObjectKey @"storedObject"
+#define SUITE_NAME       @"com.hk.SevenSecurityLayers.userdefaults"
 
 #define NSSTRING const NSString
 
@@ -17,98 +19,23 @@ NSSTRING * NOTIFICATION_CANNOT_RETRIEVE_ENCRYPTED_DATA = @"NOTIFICATION_CANNOT_R
 NSSTRING * NOTIFICATION_CANNOT_STORE_ENCRYPTED_DATA    = @"NOTIFICATION_CANNOT_STORE_ENCRYPTED_DATA";
 NSSTRING * NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED  = @"NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED";
 
-#define USERINFO_NOTIFICATION @"notification"
-#define USERINFO_MESSAGE @"message"
-#define USERINFO_KEY @"key"
-#define USERINFO_VALUE @"value"
-
-#if DEBUG
-
-#define TEST_RELEASE_MODE 1
-
-#endif
 //################################################################################################################
-NSString* UUID()
-{
-    NSString *uniqueIdentifier = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-    return uniqueIdentifier;
-}
-//################################################################################################################
-@interface CocoaSecurityResult(SevenSecurityLayers)
--(NSString*)key;
-@end
-@implementation CocoaSecurityResult(SevenSecurityLayers)
--(NSString *)key    {   return [self base64];   }
-@end
-//################################################################################################################
-@interface NSSecuredUserDefaults : NSUserDefaults
-
-@property(copy)EncryptionAlgorimth encryptBlock;
-@property(copy)DecryptionAlgorimth decryptBlock;
-
-@end
+@interface NSSecuredUserDefaults : NSUserDefaults @end
 //################################################################################################################
 @implementation NSSecuredUserDefaults
 {
-    __strong CocoaSecurityResult * _secretKey;
-    __strong CocoaSecurityResult * _UUID;
-    
-     CombineEncryption _combination;
-}
-static NSString * kStoredObjectKey;
-static NSString * SUITE_NAME;
-static NSString * _userDefaultsValueKey;
-static NSString * _userDefaultsHashKey;
-+(void)initialize
-{
-    kStoredObjectKey = @"".s.t.o.r.e.d._O.b.j.e.c.t;
-    SUITE_NAME = @"".c.o.m.dot.h.k.dot._S.e.v.e.n._S.e.c.u.r.i.t.y._L.a.y.e.r.s.dot.u.s.e.r.d.e.f.a.u.l.t.s;
-    
-    _userDefaultsValueKey = @""._D.e.f.a.u.l.t.s._V.a.l.u.e._K.e.y;
-    _userDefaultsHashKey = @""._D.e.f.a.u.l.t.s._H.a.s.h._K.e.y;
-}
-
-- (NSString *)_hashObject:(id)object
-{
-	if (_secretKey == nil) {
-		// Use if statement in case asserts are disabled
-		NSAssert(NO, @"Provide a secret before using any secure writing or reading methods!");
-		return nil;
-	}
-    
-    // Copy object to make sure it is immutable (thanks Stephen)
-    object = [object copy];
-	
-	// Archive & hash
-	NSMutableData *archivedData = [[NSKeyedArchiver archivedDataWithRootObject:object] mutableCopy];
-	[archivedData appendData:_secretKey.data];
-	if (_UUID.data != nil) {
-		[archivedData appendData:_UUID.data];
-	}
-	NSString *hash = [self _hashData:archivedData];
-	
-	return hash;
-}
-
-- (NSString *)_hashData:(NSData *)data
-{
-	return [CocoaSecurity md5WithData:data].base64;
+    __strong NSString *_secretKey;
+    enum EncryptionAlgorithm _encryption;
 }
 
 #pragma mark - Implemement category
--(instancetype)setEncryption:(EncryptionAlgorimth)encryptBlock decryption:(DecryptionAlgorimth)decryptBlock
-{
-    _encryptBlock = encryptBlock;
-    _decryptBlock = decryptBlock;
-    return self;
-}
 
 static id __securedObj = nil;
 +(instancetype)securedUserDefaults
 {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        __securedObj = [[[NSSecuredUserDefaults alloc] initWithSuiteName:SUITE_NAME] setCombination:CombineDefault];
+        __securedObj = [[[NSSecuredUserDefaults alloc] initWithSuiteName:SUITE_NAME] setEncryption:EncryptionDefault];
     });
     return __securedObj;
 }
@@ -123,38 +50,19 @@ static id __securedObj = nil;
 #endif
         [self raiseEncryptionKeyException];
     }
-    
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-#if DEBUG && !TEST_RELEASE_MODE
         _secretKey = [secretKey copy];
-#else
-        _secretKey = [CocoaSecurity md5:secretKey];
-#endif
-        
     });
     
     return self;
 }
 
--(instancetype)setUUID:(NSString *)UUID
+-(instancetype)setEncryption:(enum EncryptionAlgorithm)encryptionAlgorithm
 {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-#if DEBUG && !TEST_RELEASE_MODE
-        _UUID = [UUID copy];
-#else
-        _UUID = [CocoaSecurity md5:UUID];;
-#endif
-    });
-    
-    return self;
-}
-
--(instancetype)setCombination:(CombineEncryption)combination{
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        _combination = combination;
+        _encryption = encryptionAlgorithm;
     });
     
     return self;
@@ -180,7 +88,7 @@ static id __securedObj = nil;
 -(void)setSecuredObject:(id)value forKey:(NSString *)defaultName
 {
     // Check if we have a (valid) key needed to encrypt
-    if(!_secretKey)
+    if(!_secretKey.length)
     {
 #ifdef DEBUG
         NSLog(@"NSSecuredUserDefaults >>> %@",@"Secret may not be nil when storing an object securely");
@@ -199,7 +107,7 @@ static id __securedObj = nil;
         [archiver finishEncoding];
         
         // Generate key and IV
-        CocoaSecurityResult *keyData = [CocoaSecurity sha384:_secretKey.key];
+        CocoaSecurityResult *keyData = [CocoaSecurity sha384:_secretKey];
         NSData *aesKey = [keyData.data subdataWithRange:NSMakeRange(0, 32)];
         NSData *aesIv = [keyData.data subdataWithRange:NSMakeRange(32, 16)];
         
@@ -207,7 +115,7 @@ static id __securedObj = nil;
         CocoaSecurityResult *result = [CocoaSecurity aesEncryptWithData:data key:aesKey iv:aesIv];
         
         // Save data in user defaults
-        [super setObject:@{_userDefaultsValueKey:result.data,_userDefaultsHashKey:[self _hashObject:value]} forKey:defaultName];
+        [super setObject:result.data forKey:defaultName];
     }
     @catch (NSException *exception) {
         
@@ -216,7 +124,7 @@ static id __securedObj = nil;
         NSLog(@"Cannot store object securely: %@",exception.reason);
 #endif
         
-        [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_CANNOT_STORE_ENCRYPTED_DATA copy] object:self userInfo:@{USERINFO_NOTIFICATION:[NSNumber numberWithInteger:NotificationCannotStoreData],@"message": [NSString stringWithFormat:@"Cannot store object securely: %@",exception.reason],@"key":defaultName,@"value":value}];
+        [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_CANNOT_STORE_ENCRYPTED_DATA copy] object:self userInfo:@{@"message": [NSString stringWithFormat:@"Cannot store object securely: %@",exception.reason],@"key":defaultName,@"value":value}];
     }
     @finally {}
 }
@@ -224,7 +132,7 @@ static id __securedObj = nil;
 -(id)securedObjectForKey:(NSString *)defaultName
 {
     // Check if we have a (valid) key needed to decrypt
-    if(!_secretKey)
+    if(!_secretKey.length)
     {
 #ifdef DEBUG
         NSLog(@"NSSecuredUserDefaults >>> %@",@"Secret may not be nil or blank when storing an object securely");
@@ -235,10 +143,7 @@ static id __securedObj = nil;
     }
     
     // Fetch data from user defaults
-    NSDictionary *dic = [super objectForKey:defaultName];
-    NSData *data = [dic objectForKey:_userDefaultsValueKey];
-    id hash = [dic objectForKey:_userDefaultsHashKey];
-    id hashAgain = nil;
+    NSData *data = [super objectForKey:defaultName];
     
     // Check if we have some data to decrypt, return nil if no
     if(data == nil) {
@@ -249,7 +154,7 @@ static id __securedObj = nil;
     @try {
         
         // Generate key and IV
-        CocoaSecurityResult *keyData = [CocoaSecurity sha384:_secretKey.key];
+        CocoaSecurityResult *keyData = [CocoaSecurity sha384:_secretKey];
         NSData *aesKey = [keyData.data subdataWithRange:NSMakeRange(0, 32)];
         NSData *aesIv = [keyData.data subdataWithRange:NSMakeRange(32, 16)];
         
@@ -260,19 +165,7 @@ static id __securedObj = nil;
         NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingWithData:result.data];
         id object = [unarchiver decodeObjectForKey:kStoredObjectKey];
         [unarchiver finishDecoding];
-        
-        hashAgain = [self _hashObject:object];
-        
-        if([hash isEqualToString:hashAgain])
-        {
-            return object;
-        }
-        else
-        {
-            NSDictionary *userInfo = @{USERINFO_NOTIFICATION:[NSNumber numberWithInteger:NotificationDataIsViolated],USERINFO_MESSAGE:@"Original data was violated by ...",USERINFO_KEY:defaultName,USERINFO_VALUE:object};
-            [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED copy] object:self userInfo:userInfo];
-        }
-        return nil;
+        return object;
     }
     @catch (NSException *exception) {
         
@@ -280,7 +173,7 @@ static id __securedObj = nil;
         // Whoops!
         NSLog(@"Cannot receive object from encrypted data storage: %@",exception.reason);
 #endif
-        [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_CANNOT_RETRIEVE_ENCRYPTED_DATA copy] object:self userInfo:@{USERINFO_NOTIFICATION:[NSNumber numberWithInteger:NotificationCannotRetrieveData],@"message": [NSString stringWithFormat:@"Cannot receive object from encrypted data storage: %@",exception.reason],@"key":defaultName,@"value":@""}];
+        [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_CANNOT_RETRIEVE_ENCRYPTED_DATA copy] object:self userInfo:@{@"message": [NSString stringWithFormat:@"Cannot receive object from encrypted data storage: %@",exception.reason],@"key":defaultName,@"value":@""}];
         
         return nil;
     }
@@ -288,29 +181,6 @@ static id __securedObj = nil;
     @finally {}
 }
 
--(void)setNonSecuredObject:(id)value forKey:(NSString *)defaultName
-{
-    [super setObject:@{_userDefaultsValueKey: value,_userDefaultsHashKey:[self _hashObject:value]} forKey:defaultName];
-}
-
--(id)nonSecuredObjectForKey:(NSString *)defaultName
-{
-    NSDictionary *dic = [super objectForKey:defaultName];
-    id obj = [dic objectForKey:_userDefaultsValueKey];
-    id hash = [dic objectForKey:_userDefaultsHashKey];
-    id hashAgain = [self _hashObject:obj];
-    
-    if([hash isEqualToString:hashAgain])
-    {
-        return obj;
-    }
-    
-    NSDictionary *userInfo = @{USERINFO_NOTIFICATION:[NSNumber numberWithInteger:NotificationDataIsViolated],USERINFO_MESSAGE:@"Original data was violated by ...",USERINFO_KEY:defaultName,USERINFO_VALUE:obj};
-    
-    [[NSNotificationCenter defaultCenter] postNotificationName:[NOTIFICATION_STORED_DATA_HAS_BEEN_VIOLATED copy] object:self userInfo:userInfo];
-    
-    return nil;
-}
 
 #pragma mark - Storage business
 
@@ -318,7 +188,7 @@ static id __securedObj = nil;
 {
     if(defaultName.isNonSecured)
     {
-        [self setNonSecuredObject:value forKey:defaultName];
+        [super setObject:value forKey:defaultName];
     }
     else
     {
@@ -330,7 +200,7 @@ static id __securedObj = nil;
 {
     if(defaultName.isNonSecured)
     {
-        return [self nonSecuredObjectForKey:defaultName];
+        return [super objectForKey:defaultName];
     }
     
     return [self securedObjectForKey:defaultName];
@@ -341,106 +211,106 @@ static id __securedObj = nil;
 -(NSData *)dataForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSData class]]) {
-		return object;
-	} else {
-		return nil;
-	}
+    if([object isKindOfClass:[NSData class]]) {
+        return object;
+    } else {
+        return nil;
+    }
 }
 
 -(NSURL *)URLForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSURL class]]) {
-		return object;
-	} else {
-		return nil;
-	}
+    if([object isKindOfClass:[NSURL class]]) {
+        return object;
+    } else {
+        return nil;
+    }
 }
 
 -(NSDictionary *)dictionaryForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSDictionary class]]) {
-		return object;
-	} else {
-		return nil;
-	}
+    if([object isKindOfClass:[NSDictionary class]]) {
+        return object;
+    } else {
+        return nil;
+    }
 }
 
 -(NSArray *)arrayForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSArray class]]) {
-		return object;
-	} else {
-		return nil;
-	}
+    if([object isKindOfClass:[NSArray class]]) {
+        return object;
+    } else {
+        return nil;
+    }
 }
 
 -(NSArray *)stringArrayForKey:(NSString *)defaultName
 {
     id objects = [self objectForKey:defaultName];
-	if([objects isKindOfClass:[NSArray class]]) {
-		for(id object in objects) {
-			if(![object isKindOfClass:[NSString class]]) {
-				return nil;
-			}
-		}
-		return objects;
-	} else {
-		return nil;
-	}
+    if([objects isKindOfClass:[NSArray class]]) {
+        for(id object in objects) {
+            if(![object isKindOfClass:[NSString class]]) {
+                return nil;
+            }
+        }
+        return objects;
+    } else {
+        return nil;
+    }
 }
 
 -(NSString *)stringForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSString class]]) {
-		return object;
-	} else {
-		return nil;
-	}
+    if([object isKindOfClass:[NSString class]]) {
+        return object;
+    } else {
+        return nil;
+    }
 }
 
 - (BOOL)boolForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSNumber class]]) {
-		return [object boolValue];
-	} else {
-		return NO;
-	}
+    if([object isKindOfClass:[NSNumber class]]) {
+        return [object boolValue];
+    } else {
+        return NO;
+    }
 }
 
 - (NSInteger)integerForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSNumber class]]) {
-		return [object integerValue];
-	} else {
-		return 0;
-	}
+    if([object isKindOfClass:[NSNumber class]]) {
+        return [object integerValue];
+    } else {
+        return 0;
+    }
 }
 
 - (double)doubleForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSNumber class]]) {
-		return [object doubleValue];
-	} else {
-		return 0;
-	}
+    if([object isKindOfClass:[NSNumber class]]) {
+        return [object doubleValue];
+    } else {
+        return 0;
+    }
 }
 
 - (float)floatForKey:(NSString *)defaultName
 {
     id object = [self objectForKey:defaultName];
-	if([object isKindOfClass:[NSNumber class]]) {
-		return [object floatValue];
-	} else {
-		return 0.f;
-	}
+    if([object isKindOfClass:[NSNumber class]]) {
+        return [object floatValue];
+    } else {
+        return 0.f;
+    }
 }
 
 #pragma mark - Setter method
@@ -512,11 +382,9 @@ static id __securedObj = nil;
     [NSSecuredUserDefaults resetSecuredUserDefaults];
 }
 
--(instancetype)setEncryption:(EncryptionAlgorimth)encryptBlock decryption:(DecryptionAlgorimth)decryptBlock { return nil;   }
 -(instancetype)setSecretKey:(NSString *)secretKey                           {   return nil; }
--(instancetype)setCombination:(CombineEncryption)combination                {   return nil; }
+-(instancetype)setEncryption:(enum EncryptionAlgorithm)encryptionAlgorithm  {   return nil; }
 -(instancetype)setiCloud:(enum iCloudMode)iCloudMode                        {   return nil; }
--(instancetype)setUUID:(NSString *)UUID                                     {   return nil; }
 
 +(void)migrate:(NSUserDefaults *)source to:(NSUserDefaults *)destination clearSource:(BOOL)clear
 {
@@ -539,10 +407,9 @@ static id __securedObj = nil;
 //################################################################################################################
 @implementation NSDictionary (SevenSecurityLayers)
 
--(NotificationSecurity)notificationFromUserInfo { return (NotificationSecurity) [[self objectForKey:USERINFO_NOTIFICATION] description].integerValue; }
--(NSString *)messageFromUserInfo    {   return [[self objectForKey:USERINFO_MESSAGE] description];    }
--(NSString *)keyFromUserInfo        {   return [[self objectForKey:USERINFO_KEY] description];        }
--(id)valueFromUserInfo              {   return [self objectForKey:USERINFO_VALUE];                    }
+-(NSString *)messageFromUserInfo    {   return [[self objectForKey:@"message"] description];    }
+-(NSString *)keyFromUserInfo        {   return [[self objectForKey:@"key"] description];        }
+-(id)valueFromUserInfo              {   return [self objectForKey:@"value"];                    }
 
 @end
 //################################################################################################################
